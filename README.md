@@ -142,6 +142,51 @@ For the same set of findings, the scorer always produces identical scores, grade
 - No external service calls
 - No random or non-deterministic elements
 
+## LLM-Assisted Insights v0.4
+
+The LLM-Assisted Insights layer provides optional explanations and recommendations based on the deterministic audit results. This layer is completely optional and does not affect the authoritative audit results.
+
+### What it does
+- Consumes authoritative audit data (findings, quality score, evidence)
+- Uses an LLM to generate explanations and practical recommendations
+- Maintains strict separation from deterministic scoring
+- Provides gracefully degraded experience when LLM is unavailable
+
+### How it works
+1. Run deterministic audit: Scanner → Analyzer → Scorer
+2. Pass results to LLM (if enabled and configured)
+3. LLM generates insights based ONLY on provided audit data
+4. Results are combined in final output
+
+### Key Features
+- **Optional**: Use `--llm` flag to enable
+- **Graceful degradation**: Works perfectly without LLM configuration
+- **Authoritative data only**: LLM never sees raw repository contents
+- **Traceable**: Insights reference specific rule IDs
+- **Secure**: No secrets, credentials, or arbitrary file contents sent to LLM
+
+### Configuration
+Set these environment variables to enable LLM insights:
+- `OPENAI_API_KEY`: Your OpenAI API key
+- `AUDITOR_LLM_MODEL`: Model to use (default: gpt-3.5-turbo)
+- `AUDITOR_LLM_TIMEOUT`: Request timeout in seconds (default: 30.0)
+
+### Usage
+```bash
+# Deterministic audit (no LLM)
+auditor /path/to/repository --format text
+
+# With LLM insights (requires OPENAI_API_KEY)
+auditor /path/to/repository --llm --format json
+```
+
+### What it intentionally does NOT do
+- No modification of findings, severity, or quality score
+- No access to repository filesystem
+- No external service calls beyond the configured LLM provider
+- No random or non-deterministic elements in scoring
+- No storage or logging of API keys or secrets
+
 ## Architecture Overview
 
 ```

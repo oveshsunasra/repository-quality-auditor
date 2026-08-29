@@ -10,6 +10,7 @@ from auditor.models.models import (
     Finding,
 )
 from auditor.models.quality_score import QualityScore
+from auditor.models.llm_insight import LLMInsight
 
 
 class ScanResult(BaseModel):
@@ -18,6 +19,7 @@ class ScanResult(BaseModel):
     evidence: List[Evidence] = Field(default_factory=list, description="Collected evidence during scan")
     findings: List[Finding] = Field(default_factory=list, description="Findings generated from analysis")
     quality_score: Optional[QualityScore] = Field(default=None, description="Calculated quality score from findings")
+    llm_insights: Optional[LLMInsight] = Field(default=None, description="LLM-generated insights and recommendations")
     scan_completed_at: datetime = Field(default_factory=datetime.now, description="When scan completed")
     scanner_version: str = Field(default="0.1.0", description="Version of the scanner used")
 

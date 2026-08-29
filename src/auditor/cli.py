@@ -3,13 +3,15 @@
 import argparse
 import sys
 import json
-from typing import List, NoReturn
+from typing import List, NoReturn, Optional
 
 from .analyzers.repository_scanner import RepositoryScanner
 from .analyzers.repository_analyzer import RepositoryAnalyzer
 from .scoring.quality_scorer import QualityScorer
 from .models.models import RepositoryProfile, Evidence
 from .models.scan_result import ScanResult
+from .models.llm_insight import LLMInsight
+from .llm.service import create_llm_service, LLMService
 
 
 def main() -> NoReturn:
@@ -35,9 +37,14 @@ def main() -> NoReturn:
         help="Output format (default: json)"
     )
     parser.add_argument(
+        "--llm",
+        action="store_true",
+        help="Enable LLM-assisted insights (requires OPENAI_API_KEY)"
+    )
+    parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.3.0"
+        version="%(prog)s 0.4.0"
     )
 
     args = parser.parse_args()
@@ -55,12 +62,26 @@ def main() -> NoReturn:
         scorer = QualityScorer()
         quality_score = scorer.score(findings)
 
+        # Generate LLM insights if requested
+        llm_insights: Optional[LLMInsight] = None
+        if args.llm:
+            llm_service = create_llm_service()
+            if llm_service is not None:
+                llm_insights = llm_service.generate_insights(
+                    profile, evidence, findings, quality_score
+                )
+                if llm_insights is None:
+                    print("Warning: LLM insights generation returned no result.", file=sys.stderr)
+            else:
+                print("Info: LLM insights disabled (OPENAI_API_KEY not set).", file=sys.stderr)
+
         # Create scan result
         scan_result = ScanResult(
             repository_profile=profile,
             evidence=evidence,
             findings=findings,
             quality_score=quality_score,
+            llm_insights=llm_insights,
         )
 
         if args.format == "json":
@@ -91,6 +112,7 @@ def _format_text_output(scan_result: ScanResult) -> str:
     evidence = scan_result.evidence
     findings = scan_result.findings
     quality_score = scan_result.quality_score
+    llm_insights = scan_result.llm_insights
 
     # Extract useful information from evidence for display
     detected_files = []
@@ -134,6 +156,9 @@ Quality Score
 {"Deductions" if quality_score and quality_score.deductions else ""}
 {_format_deductions(quality_score.deductions) if quality_score and quality_score.deductions else ""}
 
+{"LLM Insights" if llm_insights else ""}
+{_format_llm_insights(llm_insights) if llm_insights else ""}
+
 Detected Project Files:
 {_format_list(detected_files) if detected_files else "  None"}
 
@@ -146,11 +171,6 @@ Missing Common Items:
 Evidence Collected: {scan_result.total_evidence_count}
 Findings Generated: {scan_result.total_findings_count}
 Quality Score: {quality_score.score if quality_score else 0}
-
-This is a deterministic repository scan. Future versions will include:
-- Specialized analyzers (security, performance, etc.)
-- Agent coordination
-- Scoring and recommendations
 """
     return output
 
@@ -176,6 +196,28 @@ def _format_deductions(deductions: List[dict]) -> str:
     for deduction in deductions:
         severity_label = deduction["severity"].upper()
         lines.append(f"  {deduction['rule_id']} {severity_label}    -{deduction['points']}")
+    return "\n".join(lines) + "\n"
+
+
+def _format_llm_insights(insights: Optional[LLMInsight]) -> str:
+    """Format LLM insights for display."""
+    if insights is None:
+        return ""
+
+    lines = []
+    lines.append(f"  Summary: {insights.summary}")
+    if insights.explanations:
+        lines.append("  Explanations:")
+        for exp in insights.explanations:
+            lines.append(f"    [{exp.rule_id}] {exp.explanation}")
+    if insights.recommendations:
+        lines.append("  Recommendations:")
+        for rec in insights.recommendations:
+            lines.append(f"    [{rec.rule_id}] {rec.recommendation}")
+    if insights.risks:
+        lines.append("  Risks:")
+        for risk in insights.risks:
+            lines.append(f"    [{risk.severity.upper()}] {risk.description}")
     return "\n".join(lines) + "\n"
 
 
