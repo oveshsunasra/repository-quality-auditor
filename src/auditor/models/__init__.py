@@ -9,6 +9,7 @@ from .models import (
     FindingCategory,
 )
 from .scan_result import ScanResult
+from .quality_score import QualityScore
 
 __all__ = [
     "RepositoryProfile",
@@ -18,4 +19,5 @@ __all__ = [
     "ScanResult",
     "FindingSeverity",
     "FindingCategory",
+    "QualityScore",
 ]

@@ -7,6 +7,7 @@ from typing import List, NoReturn
 
 from .analyzers.repository_scanner import RepositoryScanner
 from .analyzers.repository_analyzer import RepositoryAnalyzer
+from .scoring.quality_scorer import QualityScorer
 from .models.models import RepositoryProfile, Evidence
 from .models.scan_result import ScanResult
 
@@ -36,7 +37,7 @@ def main() -> NoReturn:
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.2.0"
+        version="%(prog)s 0.3.0"
     )
 
     args = parser.parse_args()
@@ -50,11 +51,16 @@ def main() -> NoReturn:
         analyzer = RepositoryAnalyzer()
         findings = analyzer.analyze(profile, evidence)
 
+        # Score the findings to generate quality score
+        scorer = QualityScorer()
+        quality_score = scorer.score(findings)
+
         # Create scan result
         scan_result = ScanResult(
             repository_profile=profile,
             evidence=evidence,
             findings=findings,
+            quality_score=quality_score,
         )
 
         if args.format == "json":
@@ -84,6 +90,7 @@ def _format_text_output(scan_result: ScanResult) -> str:
     profile = scan_result.repository_profile
     evidence = scan_result.evidence
     findings = scan_result.findings
+    quality_score = scan_result.quality_score
 
     # Extract useful information from evidence for display
     detected_files = []
@@ -120,6 +127,13 @@ File Statistics:
 Findings
 {_format_findings(findings) if findings else "  None"}
 
+Quality Score
+  Score: {quality_score.score if quality_score else 0}/{quality_score.max_score if quality_score else 100}
+  Grade: {quality_score.grade if quality_score else 'F'}
+
+{"Deductions" if quality_score and quality_score.deductions else ""}
+{_format_deductions(quality_score.deductions) if quality_score and quality_score.deductions else ""}
+
 Detected Project Files:
 {_format_list(detected_files) if detected_files else "  None"}
 
@@ -131,6 +145,7 @@ Missing Common Items:
 
 Evidence Collected: {scan_result.total_evidence_count}
 Findings Generated: {scan_result.total_findings_count}
+Quality Score: {quality_score.score if quality_score else 0}
 
 This is a deterministic repository scan. Future versions will include:
 - Specialized analyzers (security, performance, etc.)
@@ -150,6 +165,18 @@ def _format_findings(findings: List) -> str:
         severity_label = finding.severity.value.upper()
         lines.append(f"  [{severity_label}] {finding.rule_id} {finding.title}")
     return "\n".join(lines)
+
+
+def _format_deductions(deductions: List[dict]) -> str:
+    """Format deductions for display."""
+    if not deductions:
+        return ""
+
+    lines = []
+    for deduction in deductions:
+        severity_label = deduction["severity"].upper()
+        lines.append(f"  {deduction['rule_id']} {severity_label}    -{deduction['points']}")
+    return "\n".join(lines) + "\n"
 
 
 def _format_list(items: List[str]) -> str:

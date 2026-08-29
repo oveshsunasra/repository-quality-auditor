@@ -78,7 +78,7 @@ The Repository Analysis Engine transforms factual evidence from the Repository S
 
 ### Severity Levels
 - `low`: Minor issues or missing enhancements
-- `medium": Important improvements that should be considered
+- `medium`: Important improvements that should be considered
 - `high`: Significant gaps that may affect maintainability
 - `critical`: Severe issues requiring immediate attention
 
@@ -93,6 +93,54 @@ For the same repository state, the analyzer always produces identical findings w
 - No agent coordination
 - No scoring or quantitative assessment
 - No subjective repository quality judgment
+
+## Quality Scoring Engine v0.3
+
+The Quality Scoring Engine calculates a deterministic quality score from audit findings using a explainable, rule-based approach.
+
+### What it does
+- Consumes structured findings from the Repository Analyzer
+- Applies severity-based deductions to calculate a numerical score (0-100)
+- Assigns letter grades based on score ranges
+- Provides detailed deduction breakdown for explainability
+- Maintains deterministic behavior (same inputs always produce same score)
+
+### Scoring Policy
+Each finding severity contributes a fixed deduction from the maximum score of 100:
+- **CRITICAL**: -25 points
+- **HIGH**: -15 points  
+- **MEDIUM**: -8 points
+- **LOW**: -3 points
+- **INFO**: -0 points (no deduction)
+
+**Score Calculation**: `score = max(0, 100 - total_deductions)`
+
+### Grade Bands
+- **90–100 → A**
+- **80–89  → B**
+- **70–79  → C**
+- **60–69  → D**
+- **0–59   → F**
+
+### Example Calculation
+For findings: 1 HIGH (-15), 1 MEDIUM (-8), 1 LOW (-3):
+- Total deductions: 15 + 8 + 3 = 26
+- Final score: 100 - 26 = 74
+- Grade: C
+
+### Evidence-Backed Design
+Each deduction references the specific finding rule_id that contributed to it, ensuring traceability and transparency in the scoring process.
+
+### Deterministic Behavior
+For the same set of findings, the scorer always produces identical scores, grades, and deduction ordering (sorted by severity priority, then rule_id).
+
+### What it intentionally does NOT do
+- No LLM integration
+- No agent coordination
+- No subjective quality assessment
+- No filesystem scanning inside the scorer
+- No external service calls
+- No random or non-deterministic elements
 
 ## Architecture Overview
 

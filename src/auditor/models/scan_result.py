@@ -9,6 +9,7 @@ from auditor.models.models import (
     Evidence,
     Finding,
 )
+from auditor.models.quality_score import QualityScore
 
 
 class ScanResult(BaseModel):
@@ -16,6 +17,7 @@ class ScanResult(BaseModel):
     repository_profile: RepositoryProfile = Field(description="Profile of the scanned repository")
     evidence: List[Evidence] = Field(default_factory=list, description="Collected evidence during scan")
     findings: List[Finding] = Field(default_factory=list, description="Findings generated from analysis")
+    quality_score: Optional[QualityScore] = Field(default=None, description="Calculated quality score from findings")
     scan_completed_at: datetime = Field(default_factory=datetime.now, description="When scan completed")
     scanner_version: str = Field(default="0.1.0", description="Version of the scanner used")
 
