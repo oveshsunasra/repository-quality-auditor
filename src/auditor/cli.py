@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+import json
 from typing import NoReturn
 
 from .models.models import RepositoryProfile, Evidence, Finding, AuditReport
@@ -25,7 +26,7 @@ def main() -> NoReturn:
     parser.add_argument(
         "--format",
         "-f",
-        choices=["json", "yaml", "text"],
+        choices=["json", "text"],
         default="json",
         help="Output format (default: json)"
     )
@@ -61,15 +62,7 @@ def main() -> NoReturn:
     )
 
     if args.format == "json":
-        import json
         output = json.dumps(report.model_dump(), indent=2, default=str)
-    elif args.format == "yaml":
-        try:
-            import yaml
-            output = yaml.dump(report.model_dump(), default_flow_style=False)
-        except ImportError:
-            print("Error: PyYAML not installed. Install with: pip install pyyaml", file=sys.stderr)
-            sys.exit(1)
     else:  # text
         output = f"""Repository Quality Auditor Report
 ============================

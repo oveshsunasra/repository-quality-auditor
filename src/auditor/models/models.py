@@ -3,7 +3,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class EvidenceType(str, Enum):
@@ -72,7 +72,17 @@ class AuditReport(BaseModel):
     findings: List[Finding] = Field(default_factory=list, description="Discovered findings")
     audit_started_at: datetime = Field(default_factory=datetime.now, description="When audit started")
     audit_completed_at: Optional[datetime] = Field(default=None, description="When audit completed")
-    total_evidence_count: int = Field(default=0, description="Total number of evidence items")
-    total_findings_count: int = Field(default=0, description="Total number of findings")
     summary: Dict[str, Any] = Field(default_factory=dict, description="Summary statistics")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+
+    @computed_field
+    @property
+    def total_evidence_count(self) -> int:
+        """Total number of evidence items."""
+        return len(self.evidence)
+
+    @computed_field
+    @property
+    def total_findings_count(self) -> int:
+        """Total number of findings."""
+        return len(self.findings)

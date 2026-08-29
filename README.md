@@ -25,9 +25,6 @@ This project aims to build an automated system for analyzing software repositori
    # Basic usage
    auditor /path/to/repository --format json --output report.json
 
-   # With YAML output (requires PyYAML)
-   auditor /path/to/repository --format yaml
-
    # Text output (default to stdout)
    auditor /path/to/repository --format text
    ```
