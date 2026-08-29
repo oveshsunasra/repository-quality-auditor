@@ -25,6 +25,24 @@ class SeverityLevel(str, Enum):
     CRITICAL = "critical"
 
 
+class FindingSeverity(str, Enum):
+    """Severity levels for audit findings."""
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class FindingCategory(str, Enum):
+    """Categories for audit findings."""
+    STRUCTURE = "structure"
+    DOCUMENTATION = "documentation"
+    TESTING = "testing"
+    DEPENDENCY = "dependency"
+    CONTAINERIZATION = "containerization"
+
+
 class RepositoryProfile(BaseModel):
     """Profile of a repository being audited."""
     name: str = Field(description="Repository name")
@@ -54,10 +72,11 @@ class Evidence(BaseModel):
 class Finding(BaseModel):
     """Finding discovered during analysis."""
     id: str = Field(description="Unique identifier for the finding")
+    rule_id: str = Field(description="Unique identifier for the rule that generated this finding")
     title: str = Field(description="Short title of the finding")
     description: str = Field(description="Detailed description of the finding")
-    severity: SeverityLevel = Field(description="Severity level of the finding")
-    category: str = Field(description="Category of finding (e.g., security, performance, maintainability)")
+    severity: FindingSeverity = Field(description="Severity level of the finding")
+    category: FindingCategory = Field(description="Category of finding")
     evidence_ids: List[str] = Field(default_factory=list, description="IDs of evidence supporting this finding")
     file_path: Optional[str] = Field(default=None, description="File path related to the finding (if applicable)")
     line_number: Optional[int] = Field(default=None, description="Line number related to the finding (if applicable)")

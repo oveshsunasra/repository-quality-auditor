@@ -6,6 +6,7 @@ import json
 from typing import List, NoReturn
 
 from .analyzers.repository_scanner import RepositoryScanner
+from .analyzers.repository_analyzer import RepositoryAnalyzer
 from .models.models import RepositoryProfile, Evidence
 from .models.scan_result import ScanResult
 
@@ -35,7 +36,7 @@ def main() -> NoReturn:
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.1.0"
+        version="%(prog)s 0.2.0"
     )
 
     args = parser.parse_args()
@@ -45,10 +46,15 @@ def main() -> NoReturn:
         scanner = RepositoryScanner()
         profile, evidence = scanner.scan(args.repository_path)
 
+        # Analyze the evidence to generate findings
+        analyzer = RepositoryAnalyzer()
+        findings = analyzer.analyze(profile, evidence)
+
         # Create scan result
         scan_result = ScanResult(
             repository_profile=profile,
             evidence=evidence,
+            findings=findings,
         )
 
         if args.format == "json":
@@ -77,6 +83,7 @@ def _format_text_output(scan_result: ScanResult) -> str:
     """Format scan result as human-readable text."""
     profile = scan_result.repository_profile
     evidence = scan_result.evidence
+    findings = scan_result.findings
 
     # Extract useful information from evidence for display
     detected_files = []
@@ -110,6 +117,9 @@ File Statistics:
   Test files: {test_count}
   Total directories: {total_dirs}
 
+Findings
+{_format_findings(findings) if findings else "  None"}
+
 Detected Project Files:
 {_format_list(detected_files) if detected_files else "  None"}
 
@@ -120,6 +130,7 @@ Missing Common Items:
 {_format_list(missing_items) if missing_items else "  None"}
 
 Evidence Collected: {scan_result.total_evidence_count}
+Findings Generated: {scan_result.total_findings_count}
 
 This is a deterministic repository scan. Future versions will include:
 - Specialized analyzers (security, performance, etc.)
@@ -127,6 +138,18 @@ This is a deterministic repository scan. Future versions will include:
 - Scoring and recommendations
 """
     return output
+
+
+def _format_findings(findings: List) -> str:
+    """Format findings for display."""
+    if not findings:
+        return "  None"
+
+    lines = []
+    for finding in findings:
+        severity_label = finding.severity.value.upper()
+        lines.append(f"  [{severity_label}] {finding.rule_id} {finding.title}")
+    return "\n".join(lines)
 
 
 def _format_list(items: List[str]) -> str:

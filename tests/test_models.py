@@ -9,6 +9,8 @@ from auditor.models.models import (
     EvidenceType,
     Finding,
     SeverityLevel,
+    FindingSeverity,
+    FindingCategory,
     AuditReport
 )
 
@@ -49,10 +51,11 @@ def test_finding_creation():
     """Test creating a Finding."""
     finding = Finding(
         id="finding-1",
+        rule_id="TEST-001",
         title="Hardcoded secret",
         description="Found hardcoded API key in source code",
-        severity=SeverityLevel.HIGH,
-        category="security",
+        severity=FindingSeverity.HIGH,
+        category=FindingCategory.TESTING,  # Using TESTING as closest to "security" for test
         evidence_ids=["ev-1"],
         file_path="config.py",
         line_number=42,
@@ -60,10 +63,11 @@ def test_finding_creation():
     )
 
     assert finding.id == "finding-1"
+    assert finding.rule_id == "TEST-001"
     assert finding.title == "Hardcoded secret"
     assert finding.description == "Found hardcoded API key in source code"
-    assert finding.severity == SeverityLevel.HIGH
-    assert finding.category == "security"
+    assert finding.severity == FindingSeverity.HIGH
+    assert finding.category == FindingCategory.TESTING
     assert finding.evidence_ids == ["ev-1"]
     assert finding.file_path == "config.py"
     assert finding.line_number == 42
@@ -81,10 +85,11 @@ def test_audit_report_creation():
     )
     finding = Finding(
         id="finding-1",
+        rule_id="STRUCT-001",
         title="Missing license",
         description="No license file found",
-        severity=SeverityLevel.MEDIUM,
-        category="legal",
+        severity=FindingSeverity.MEDIUM,
+        category=FindingCategory.STRUCTURE,  # Using STRUCTURE as closest to "legal" for test
         evidence_ids=["ev-1"]
     )
 
@@ -138,18 +143,20 @@ def test_audit_report_multiple_items():
 
     finding1 = Finding(
         id="f-1",
+        rule_id="TEST-001",
         title="Finding 1",
         description="First finding",
-        severity=SeverityLevel.LOW,
-        category="test",
+        severity=FindingSeverity.LOW,
+        category=FindingCategory.TESTING,
         evidence_ids=["ev-1"]
     )
     finding2 = Finding(
         id="f-2",
+        rule_id="TEST-002",
         title="Finding 2",
         description="Second finding",
-        severity=SeverityLevel.HIGH,
-        category="test",
+        severity=FindingSeverity.HIGH,
+        category=FindingCategory.TESTING,
         evidence_ids=["ev-2"]
     )
 
@@ -170,20 +177,22 @@ def test_finding_confidence_boundaries():
     # Valid boundaries
     finding_min = Finding(
         id="f-min",
+        rule_id="TEST-001",
         title="Min confidence",
         description="Test",
-        severity=SeverityLevel.LOW,
-        category="test",
+        severity=FindingSeverity.LOW,
+        category=FindingCategory.TESTING,
         confidence=0.0
     )
     assert finding_min.confidence == 0.0
 
     finding_max = Finding(
         id="f-max",
+        rule_id="TEST-001",
         title="Max confidence",
         description="Test",
-        severity=SeverityLevel.LOW,
-        category="test",
+        severity=FindingSeverity.LOW,
+        category=FindingCategory.TESTING,
         confidence=1.0
     )
     assert finding_max.confidence == 1.0
@@ -192,20 +201,22 @@ def test_finding_confidence_boundaries():
     with pytest.raises(ValidationError):
         Finding(
             id="f-invalid-low",
+            rule_id="TEST-001",
             title="Invalid low",
             description="Test",
-            severity=SeverityLevel.LOW,
-            category="test",
+            severity=FindingSeverity.LOW,
+            category=FindingCategory.TESTING,
             confidence=-0.1
         )
 
     with pytest.raises(ValidationError):
         Finding(
             id="f-invalid-high",
+            rule_id="TEST-001",
             title="Invalid high",
             description="Test",
-            severity=SeverityLevel.LOW,
-            category="test",
+            severity=FindingSeverity.LOW,
+            category=FindingCategory.TESTING,
             confidence=1.1
         )
 
@@ -256,10 +267,11 @@ def test_finding_optional_fields():
     """Test Finding with optional fields."""
     finding = Finding(
         id="f-none-opt",
+        rule_id="TEST-001",
         title="Optional fields test",
         description="Test optional fields",
-        severity=SeverityLevel.INFO,
-        category="test",
+        severity=FindingSeverity.INFO,
+        category=FindingCategory.TESTING,
         evidence_ids=[],  # Empty list
         file_path=None,   # None value
         line_number=None, # None value
