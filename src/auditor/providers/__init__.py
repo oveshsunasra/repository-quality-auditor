@@ -1,0 +1,1 @@
+"""Providers for repository quality auditor."""

@@ -1,0 +1,1 @@
+"""Scoring mechanisms for repository quality auditor."""
