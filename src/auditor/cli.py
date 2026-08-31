@@ -1,9 +1,15 @@
 """CLI entry point for repository quality auditor."""
 
 import argparse
-import sys
 import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
 from typing import List, NoReturn, Optional
+from urllib.parse import urlsplit
 
 from .analyzers.repository_scanner import RepositoryScanner
 from .analyzers.repository_analyzer import RepositoryAnalyzer
@@ -14,6 +20,99 @@ from .models.llm_insight import LLMInsight
 from .llm.service import create_llm_service, LLMService
 
 
+GIT_CLONE_TIMEOUT_SECONDS = 300
+
+
+def _is_http_url(value: str) -> bool:
+    """Return whether a value is an HTTP(S) URL candidate."""
+    return value.startswith(("http://", "https://"))
+
+
+def _parse_github_repository_url(value: str) -> str:
+    """Validate a supported public GitHub HTTPS repository URL.
+
+    Returns a canonical URL without a trailing ``.git``. This deliberately
+    supports only the public GitHub URL forms documented by the CLI.
+    """
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname != "github.com"
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.port is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(
+            "Unsupported repository URL. Use https://github.com/OWNER/REPOSITORY"
+        )
+
+    path_parts = [part for part in parsed.path.split("/") if part]
+    if len(path_parts) != 2:
+        raise ValueError(
+            "Unsupported repository URL. Use https://github.com/OWNER/REPOSITORY"
+        )
+
+    owner, repository = path_parts
+    if repository.endswith(".git"):
+        repository = repository[:-4]
+
+    if not owner or not repository or any(
+        character.isspace() for character in f"{owner}{repository}"
+    ):
+        raise ValueError(
+            "Unsupported repository URL. Use https://github.com/OWNER/REPOSITORY"
+        )
+
+    return f"https://github.com/{owner}/{repository}"
+
+
+def _remove_directory(path: Path) -> None:
+    """Best-effort removal of a temporary clone, including read-only files."""
+
+    def make_writable_and_retry(function, target, _exc_info):
+        try:
+            os.chmod(target, 0o700)
+            function(target)
+        except OSError:
+            pass
+
+    shutil.rmtree(path, onerror=make_writable_and_retry)
+
+
+def _clone_github_repository(url: str) -> Path:
+    """Clone a validated public GitHub URL into a newly-created temp directory."""
+    if shutil.which("git") is None:
+        raise RuntimeError("git is required to audit a repository URL but was not found in PATH")
+
+    clone_dir = Path(tempfile.mkdtemp(prefix="repository-quality-auditor-"))
+    try:
+        subprocess.run(
+            ["git", "clone", "--depth", "1", url, str(clone_dir)],
+            check=True,
+            capture_output=True,
+            timeout=GIT_CLONE_TIMEOUT_SECONDS,
+        )
+        return clone_dir
+    except subprocess.TimeoutExpired as error:
+        _remove_directory(clone_dir)
+        raise RuntimeError(
+            "Timed out while cloning the GitHub repository "
+            f"after {error.timeout} seconds"
+        ) from error
+    except subprocess.CalledProcessError as error:
+        _remove_directory(clone_dir)
+        raise RuntimeError(
+            "Unable to clone the GitHub repository "
+            f"(git exited with status {error.returncode}). "
+            "Verify that the repository is public and accessible."
+        ) from error
+    except OSError as error:
+        _remove_directory(clone_dir)
+        raise RuntimeError(f"Unable to start git: {error}") from error
+
+
 def main() -> NoReturn:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -21,7 +120,7 @@ def main() -> NoReturn:
     )
     parser.add_argument(
         "repository_path",
-        help="Path to the repository to audit"
+        help="Local repository path or public GitHub HTTPS URL"
     )
     parser.add_argument(
         "--output",
@@ -42,27 +141,39 @@ def main() -> NoReturn:
         help="Enable LLM-assisted insights (requires OPENAI_API_KEY)"
     )
     parser.add_argument(
+        "--keep-clone",
+        action="store_true",
+        help="Keep a temporary clone made for a GitHub URL after the audit"
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version="%(prog)s 0.4.0"
     )
 
     args = parser.parse_args()
+    temporary_clone: Optional[Path] = None
+    scan_path = args.repository_path
 
     try:
-        # Scan the repository
-        scanner = RepositoryScanner()
-        profile, evidence = scanner.scan(args.repository_path)
+        if _is_http_url(args.repository_path):
+            github_url = _parse_github_repository_url(args.repository_path)
+            temporary_clone = _clone_github_repository(github_url)
+            scan_path = str(temporary_clone)
 
-        # Analyze the evidence to generate findings
+        # Scan the repository.
+        scanner = RepositoryScanner()
+        profile, evidence = scanner.scan(scan_path)
+
+        # Analyze the evidence to generate findings.
         analyzer = RepositoryAnalyzer()
         findings = analyzer.analyze(profile, evidence)
 
-        # Score the findings to generate quality score
+        # Score the findings to generate quality score.
         scorer = QualityScorer()
         quality_score = scorer.score(findings)
 
-        # Generate LLM insights if requested
+        # Generate LLM insights if requested.
         llm_insights: Optional[LLMInsight] = None
         if args.llm:
             llm_service = create_llm_service()
@@ -75,7 +186,7 @@ def main() -> NoReturn:
             else:
                 print("Info: LLM insights disabled (OPENAI_API_KEY not set).", file=sys.stderr)
 
-        # Create scan result
+        # Create scan result.
         scan_result = ScanResult(
             repository_profile=profile,
             evidence=evidence,
@@ -98,12 +209,18 @@ def main() -> NoReturn:
 
         sys.exit(0)
 
-    except (ValueError, PermissionError, OSError) as e:
-        print(f"Error: {e}", file=sys.stderr)
+    except (ValueError, PermissionError, OSError, RuntimeError) as error:
+        print(f"Error: {error}", file=sys.stderr)
         sys.exit(1)
-    except Exception as e:
-        print(f"Unexpected error: {e}", file=sys.stderr)
+    except Exception as error:
+        print(f"Unexpected error: {error}", file=sys.stderr)
         sys.exit(1)
+    finally:
+        if temporary_clone is not None:
+            if args.keep_clone:
+                print(f"Temporary clone preserved at: {temporary_clone}", file=sys.stderr)
+            elif temporary_clone.exists():
+                _remove_directory(temporary_clone)
 
 
 def _format_text_output(scan_result: ScanResult) -> str:
